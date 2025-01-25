@@ -1,0 +1,23 @@
+{
+  "name": "final-hackathon",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "autoprefixer": "^10.4.20",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^4.0.0"
+  }
+}
