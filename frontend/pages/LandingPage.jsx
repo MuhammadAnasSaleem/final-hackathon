@@ -1,8 +1,9 @@
 import React from "react";
 import Navbar from "../components/Navbar";
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
+import LoanCalculator from "../components/LoanCalculator";
 
 const loanCategories = [
   {
@@ -10,29 +11,34 @@ const loanCategories = [
     description: "Plan your special day with ease.",
     color: "bg-pink-100",
     hoverColor: "hover:bg-pink-200",
+    route: "/wedding", // Add route property
   },
   {
     name: "Home Construction Loans",
     description: "Build or renovate your dream home.",
     color: "bg-blue-100",
     hoverColor: "hover:bg-blue-200",
+    route: "/home", // Add route property
   },
   {
     name: "Business Startup Loans",
     description: "Kickstart your business journey.",
     color: "bg-green-100",
     hoverColor: "hover:bg-green-200",
+    route: "/buisness", // Add route property
   },
   {
     name: "Education Loans",
     description: "Invest in a brighter future.",
     color: "bg-yellow-100",
     hoverColor: "hover:bg-yellow-200",
+    route: "/education", // Add route property
   },
 ];
 
 const LandingPage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
+  const navigate = useNavigate(); // Initialize the useNavigate hook
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -67,6 +73,7 @@ const LandingPage = () => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
   return (
     <div>
       <Navbar />
@@ -80,7 +87,7 @@ const LandingPage = () => {
             <div
               key={index}
               className={`p-6 rounded-lg shadow-md cursor-pointer transition-all duration-300 ${category.color} ${category.hoverColor}`}
-              onClick={() => alert(`Redirect to ${category.name} page`)}
+              onClick={() => navigate(category.route)} // Navigate to the specified route
             >
               <h2 className="text-2xl font-semibold text-gray-800 mb-4">
                 {category.name}
@@ -89,6 +96,7 @@ const LandingPage = () => {
             </div>
           ))}
         </div>
+        <LoanCalculator />
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 export default function Signup() {
   const baseurl = "http://localhost:3000/api/v1";
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -11,7 +12,6 @@ export default function Signup() {
     password: "",
     cninc: "",
   });
-  console.log(formData);
 
   const handleSignup = async (formData) => {
     try {
@@ -20,6 +20,7 @@ export default function Signup() {
       });
       alert(response.data.message);
       setFormData({ name: "", email: "", password: "", cninc: "" });
+      navigate("/protected");
     } catch (error) {
       alert(error.response?.data?.message || "Error in signup");
       console.log(error.response);

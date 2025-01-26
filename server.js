@@ -1,19 +1,21 @@
 import express from "express";
 import "dotenv/config";
-import "./database.js";
+import "./database.js"; // Assuming you have a separate file to connect to MongoDB
 import bcrypt from "bcrypt";
 import Joi from "joi";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-const app = express();
-const port = 3000;
 import { User } from "./models/user.js";
+import { Loan } from "./models/loan.js"; // Import the Loan model
+
+const app = express();
+const port = process.env.PORT || 3000;
 
 app.use(cookieParser());
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: true, // Allows all origins
     credentials: true,
   })
 );
@@ -22,6 +24,7 @@ app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
+// Validation Schema for Signup
 const signupSchema = Joi.object({
   name: Joi.string().min(3).required(),
   email: Joi.string().email().required(),
@@ -29,139 +32,189 @@ const signupSchema = Joi.object({
   cninc: Joi.string().required(),
 });
 
-app.post("/api/v1/signup", async (req, res) => {
-  if (
-    !req.body.email ||
-    !req.body.password ||
-    !req.body.name ||
-    !req.body.cninc
-  ) {
-    res.status(400).send({ message: `parameters missing` });
-    return;
-    //this check all parameter are available
-  }
-  const { error } = signupSchema.validate(req.body);
-  if (error) {
-    res.status(400).send({ message: error.details[0].message });
-    return;
-    //this check all parameter are correct/valid
-  }
-  const existingUserByCNIC = await User.findOne({ cninc: req.body.cninc });
-  if (existingUserByCNIC) {
-    res.status(400).send({ message: "CNIC already exists" });
-    return;
-  }
-  const user = await User.findOne({ email: req.body.email });
-  if (user) {
-    res.status(400).send({ message: "Account Already exist" });
-    return;
-    //this check if account already exist or  not
-  }
-  try {
-    const hashPassword = await bcrypt.hash(req.body.password, 10);
-
-    const result = await User.create({
-      name: req.body.name,
-      password: hashPassword,
-      email: req.body.email,
-      cninc: req.body.cninc,
-    });
-
-    const { password, __v, ...userWithOutPassword } = result.toObject();
-
-    res
-      .status(201)
-      .send({ message: "SignUp successfully", data: userWithOutPassword });
-  } catch (error) {
-    res
-      .status(500)
-      .send({ message: "error creating user", error: error.message });
-  }
-});
-app.post("/api/v1/login", async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
-  if (!user) {
-    res.status(400).send({ message: "Invalid credentials" });
-    return;
-    //this check that if the account with the email user enter exist or not
-  }
-  if (user.cninc !== req.body.cninc) {
-    res.status(400).send({ message: "Invalid credentials" });
-    return;
-  }
-  const isMatch = await bcrypt.compare(req.body.password, user.password);
-  if (!isMatch) {
-    res.status(400).send({ message: "Invalid credentials" });
-    return;
-    //this check that the password user enter match with the user.password
-  }
-  const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
-    expiresIn: "7d",
-  });
-  res
-    .cookie("myToken", token, {
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      sameSite: "Lax", // You can try changing this to "Lax" if you're using CORS with different origins
-    })
-    .status(200)
-    .send({ message: "Login SuccessFully!", token: token });
-});
-
+// Middleware to Authenticate Token
 const authenticateToken = (req, res, next) => {
   try {
     const token = req.cookies.myToken;
-    // console.log("Token in cookies:", req.cookies.myToken);
 
     if (!token) {
-      return res.status(401).send({ message: "Token missing hai" });
+      return res.status(401).send({ message: "Token is missing" });
     }
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
       if (err) {
         return res
           .status(401)
-          .send({ message: "Token invalid ya expire ho gaya hai" });
+          .send({ message: "Token is invalid or has expired" });
       }
-      req.user = user; // Attach user information to the request
-      next(); // Proceed to the next middleware or route handler
+      req.user = user; // Attach user info to the request object
+      next();
     });
   } catch (error) {
-    console.error(error); // Log the error for debugging
+    console.error(error);
     res
       .status(401)
-      .send({ message: "Error in authentication", error: error.message });
+      .send({ message: "Authentication error", error: error.message });
   }
 };
 
-app.get("/api/v1/protected", authenticateToken, (req, res) => {
-  res.send({ message: "This is a protected route", user: req.user });
-});
-app.get("/", (req, res) => {
-  res.send("Api working!");
-});
-app.post("/api/v1/logout", (req, res) => {
-  const token = req.cookies.myToken;
-
-  // Check if the token exists
-  if (!token) {
-    // Log a message and return a success response indicating the user is already logged out
-    console.log("No token found, user may already be logged out.");
-    return res.status(200).send({ message: "Already logged out" });
+// Signup Route
+app.post("/api/v1/signup", async (req, res) => {
+  const { error } = signupSchema.validate(req.body);
+  if (error) {
+    return res.status(400).send({ message: error.details[0].message });
   }
 
-  res.clearCookie("myToken", {
-    httpOnly: true,
-    sameSite: "Strict", // Should match the sameSite setting you used when setting the cookie
+  const existingUserByCNIC = await User.findOne({ cninc: req.body.cninc });
+  if (existingUserByCNIC) {
+    return res.status(400).send({ message: "CNIC already exists" });
+  }
+
+  const user = await User.findOne({ email: req.body.email });
+  if (user) {
+    return res.status(400).send({ message: "Account already exists" });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+    const newUser = await User.create({
+      name: req.body.name,
+      email: req.body.email,
+      password: hashedPassword,
+      cninc: req.body.cninc,
+    });
+    const { password, __v, ...userWithoutPassword } = newUser.toObject();
+    res
+      .status(201)
+      .send({ message: "Signup successful", data: userWithoutPassword });
+  } catch (error) {
+    res
+      .status(500)
+      .send({ message: "Error creating user", error: error.message });
+  }
+});
+
+// Login Route
+app.post("/api/v1/login", async (req, res) => {
+  const user = await User.findOne({ email: req.body.email });
+  if (!user || user.cninc !== req.body.cninc) {
+    return res.status(400).send({ message: "Invalid credentials" });
+  }
+
+  const isMatch = await bcrypt.compare(req.body.password, user.password);
+  if (!isMatch) {
+    return res.status(400).send({ message: "Invalid credentials" });
+  }
+
+  const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
+    expiresIn: "7d",
   });
 
+  res
+    .cookie("myToken", token, {
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      sameSite: "Lax",
+    })
+    .status(200)
+    .send({ message: "Login successful", token });
+});
+
+// Logout Route
+app.post("/api/v1/logout", (req, res) => {
+  res.clearCookie("myToken", {
+    httpOnly: true,
+    sameSite: "Strict",
+  });
   res.status(200).send({ message: "Logged out successfully" });
 });
 
-app.use((request, response) => {
-  response.status(404).send({ message: "no route found!" });
+// Protected Route
+app.get("/api/v1/protected", authenticateToken, (req, res) => {
+  res.send({ message: "This is a protected route", user: req.user });
 });
 
+// Loan Submission Route
+app.post("/api/v1/loans", authenticateToken, async (req, res) => {
+  const { category, subcategory, amount, period } = req.body;
+
+  if (!category || !subcategory || !amount || !period) {
+    return res.status(400).send({ message: "All fields are required" });
+  }
+
+  try {
+    const newLoan = new Loan({
+      user: req.user.id,
+      category,
+      subcategory,
+      amount,
+      period,
+    });
+
+    const savedLoan = await newLoan.save();
+    res.status(201).send({
+      message: "Loan application submitted successfully",
+      loan: savedLoan,
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Error submitting loan application",
+      error: error.message,
+    });
+  }
+});
+
+// Admin - View All Loans
+app.get("/api/v1/admin/loans", authenticateToken, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).send({ message: "Access denied" });
+  }
+
+  try {
+    const loans = await Loan.find().populate("user", "name email cninc");
+    res.status(200).send({ loans });
+  } catch (error) {
+    res.status(500).send({
+      message: "Error fetching loans",
+      error: error.message,
+    });
+  }
+});
+
+// Admin - Update Loan Status
+app.put("/api/v1/admin/loans/:loanId", authenticateToken, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).send({ message: "Access denied" });
+  }
+
+  const { status } = req.body;
+  if (!["pending", "approved", "rejected"].includes(status)) {
+    return res.status(400).send({ message: "Invalid status" });
+  }
+
+  try {
+    const updatedLoan = await Loan.findByIdAndUpdate(
+      req.params.loanId,
+      { status },
+      { new: true }
+    );
+    res.status(200).send({ message: "Loan status updated", loan: updatedLoan });
+  } catch (error) {
+    res.status(500).send({
+      message: "Error updating loan status",
+      error: error.message,
+    });
+  }
+});
+app.get("/", (req, res) => {
+  res.status(200).send({ message: "api is working flawlessly" });
+});
+// Fallback Route for 404
+app.use((req, res) => {
+  res.status(404).send({ message: "Route not found!" });
+});
+
+// Start the Server
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Server running on port ${port}`);
 });
